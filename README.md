@@ -1,5 +1,7 @@
 # Voice AI Demo
 
+![Voice AI Demo UI](assets/demo.png)
+
 Real-time voice pipeline: **Deepgram STT → Groq LLM → ElevenLabs TTS**
 
 Built as a portfolio project targeting production voice AI patterns used in systems like financial advisory call agents.
