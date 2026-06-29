@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Voice AI Demo</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: rgba(255,255,255,0.08);
+    --text: #e8e6e0;
+    --muted: #6b6965;
+    --accent: #a78bfa;
+    --accent-dim: rgba(167,139,250,0.12);
+    --green: #34d399;
+    --red: #f87171;
+    --amber: #fbbf24;
+    --radius: 10px;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.6;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px;
+    gap: 24px;
+  }
+
+  header {
+    text-align: center;
+  }
+
+  header h1 {
+    font-size: 22px;
+    font-weight: 500;
+    color: var(--text);
+    letter-spacing: -0.3px;
+  }
+
+  header p {
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    width: 100%;
+    max-width: 680px;
+  }
+
+  /* Mic button */
+  #mic-btn {
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    border: 1.5px solid var(--border);
+    background: var(--surface2);
+    color: var(--text);
+    font-size: 28px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s ease;
+    margin: 0 auto;
+  }
+
+  #mic-btn:hover { border-color: var(--accent); }
+
+  #mic-btn.recording {
+    border-color: var(--red);
+    background: rgba(248,113,113,0.08);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(248,113,113,0.3); }
+    50% { box-shadow: 0 0 0 10px rgba(248,113,113,0); }
+  }
+
+  #mic-label {
+    text-align: center;
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 8px;
+  }
+
+  /* Waveform */
+  #waveform {
+    width: 100%;
+    height: 48px;
+    margin: 12px 0 0;
+  }
+
+  /* Conversation */
+  #conversation {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  #conversation::-webkit-scrollbar { width: 4px; }
+  #conversation::-webkit-scrollbar-track { background: transparent; }
+  #conversation::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .turn {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .bubble {
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.5;
+    max-width: 88%;
+  }
+
+  .bubble.user {
+    background: var(--accent-dim);
+    border: 1px solid rgba(167,139,250,0.2);
+    align-self: flex-end;
+    color: var(--text);
+  }
+
+  .bubble.assistant {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    align-self: flex-start;
+    color: var(--text);
+  }
+
+  .bubble.streaming { opacity: 0.7; }
+  .bubble.streaming::after { content: "▋"; animation: blink 0.8s step-end infinite; }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  /* Latency panel */
+  #latency-panel {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .metric {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+
+  .metric-label {
+    font-size: 11px;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  .metric-value {
+    font-size: 20px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+  }
+
+  .metric-value.good { color: var(--green); }
+  .metric-value.warn { color: var(--amber); }
+  .metric-value.bad  { color: var(--red); }
+
+  /* Status bar */
+  #status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  #status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--muted);
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+
+  #status-dot.connected { background: var(--green); }
+  #status-dot.error     { background: var(--red); }
+  #status-dot.active    { background: var(--accent); animation: pulse-dot 0.8s infinite; }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  .card-title {
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 14px;
+  }
+
+  #reset-btn {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+    padding: 4px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  #reset-btn:hover { border-color: var(--red); color: var(--red); }
+
+  .top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Voice AI Demo</h1>
+  <p>Deepgram STT · Groq LLM · ElevenLabs TTS</p>
+</header>
+
+<!-- Mic card -->
+<div class="card" style="text-align:center">
+  <button id="mic-btn" aria-label="Toggle microphone">🎙️</button>
+  <div id="mic-label">Click to start</div>
+  <canvas id="waveform"></canvas>
+  <div id="status" style="justify-content:center; margin-top:8px">
+    <span id="status-dot"></span>
+    <span id="status-text">Disconnected</span>
+  </div>
+</div>
+
+<!-- Latency card -->
+<div class="card">
+  <div class="card-title">Latency (last turn)</div>
+  <div id="latency-panel">
+    <div class="metric">
+      <div class="metric-label">STT</div>
+      <div class="metric-value" id="m-stt">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">LLM TTFT</div>
+      <div class="metric-value" id="m-llm">—</div>
+    </div>
+    <div class="metric">
+      <div class="metric-label">Total</div>
+      <div class="metric-value" id="m-total">—</div>
+    </div>
+  </div>
+</div>
+
+<!-- Conversation card -->
+<div class="card">
+  <div class="top-row">
+    <div class="card-title" style="margin-bottom:0">Conversation</div>
+    <button id="reset-btn">Reset</button>
+  </div>
+  <div id="conversation">
+    <div style="color:var(--muted); font-size:13px; text-align:center; padding: 20px 0">
+      Start talking to begin...
+    </div>
+  </div>
+</div>
+
+<script>
+const WS_URL = `ws://${location.host}/ws`;
+
+// State
+let ws = null;
+let mediaStream = null;
+let audioContext = null;
+let processor = null;
+let analyser = null;
+let isRecording = false;
+let audioQueue = [];
+let isPlayingAudio = false;
+let currentAssistantBubble = null;
+let currentTurnDiv = null;
+
+// Elements
+const micBtn = document.getElementById('mic-btn');
+const micLabel = document.getElementById('mic-label');
+const statusDot = document.getElementById('status-dot');
+const statusText = document.getElementById('status-text');
+const conversation = document.getElementById('conversation');
+const waveformCanvas = document.getElementById('waveform');
+const waveCtx = waveformCanvas.getContext('2d');
+const resetBtn = document.getElementById('reset-btn');
+
+// Metrics
+function setMetric(id, value, thresholds) {
+  const el = document.getElementById(id);
+  if (value === null) { el.textContent = '—'; el.className = 'metric-value'; return; }
+  el.textContent = value + 'ms';
+  const [good, warn] = thresholds;
+  el.className = 'metric-value ' + (value < good ? 'good' : value < warn ? 'warn' : 'bad');
+}
+
+function setStatus(state, text) {
+  statusDot.className = 'status-dot ' + state;
+  statusText.textContent = text;
+}
+
+// WebSocket
+function connectWS() {
+  ws = new WebSocket(WS_URL);
+  ws.binaryType = 'arraybuffer';
+
+  ws.onopen = () => {
+    setStatus('connected', 'Connected');
+    statusDot.classList.add('connected');
+  };
+
+  ws.onclose = () => {
+    setStatus('', 'Disconnected');
+    statusDot.className = '';
+    if (isRecording) stopRecording();
+  };
+
+  ws.onerror = () => {
+    setStatus('error', 'Connection error');
+    statusDot.className = 'error';
+  };
+
+  ws.onmessage = (event) => {
+    const msg = JSON.parse(event.data);
+    handleMessage(msg);
+  };
+}
+
+function handleMessage(msg) {
+  switch (msg.type) {
+    case 'vad_end':
+      setStatus('active', 'Processing...');
+      break;
+
+    case 'transcript':
+      addUserBubble(msg.text);
+      currentTurnDiv = null;
+      setStatus('active', `STT ${msg.latency_ms}ms · waiting for LLM...`);
+      break;
+
+    case 'llm_start':
+      currentAssistantBubble = addAssistantBubble('');
+      currentAssistantBubble.classList.add('streaming');
+      setStatus('active', `LLM TTFT ${msg.ttft_ms}ms`);
+      break;
+
+    case 'token':
+      if (currentAssistantBubble) {
+        currentAssistantBubble.textContent += msg.text;
+        conversation.scrollTop = conversation.scrollHeight;
+      }
+      break;
+
+    case 'llm_done':
+      if (currentAssistantBubble) {
+        currentAssistantBubble.classList.remove('streaming');
+      }
+      break;
+
+    case 'audio_chunk':
+      enqueueAudio(msg.data);
+      break;
+
+    case 'sentence_done':
+      break;
+
+    case 'turn_done':
+      const { stt_ms, llm_ttft_ms, total_ms } = msg.latency;
+      setMetric('m-stt', stt_ms, [200, 400]);
+      setMetric('m-llm', llm_ttft_ms, [300, 600]);
+      setMetric('m-total', total_ms, [800, 1500]);
+      setStatus('connected', 'Ready — speak again');
+      break;
+
+    case 'stt_empty':
+      setStatus('connected', 'No speech detected');
+      break;
+
+    case 'reset_ack':
+      conversation.innerHTML = '<div style="color:var(--muted); font-size:13px; text-align:center; padding:20px 0">Conversation reset.</div>';
+      break;
+
+    case 'error':
+      setStatus('error', 'Error: ' + msg.message);
+      break;
+  }
+}
+
+// Conversation UI
+function addUserBubble(text) {
+  const empty = conversation.querySelector('[style*="Start talking"]') || conversation.querySelector('[style*="reset"]');
+  if (empty) empty.remove();
+
+  const turn = document.createElement('div');
+  turn.className = 'turn';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble user';
+  bubble.textContent = text;
+  turn.appendChild(bubble);
+  conversation.appendChild(turn);
+  currentTurnDiv = turn;
+  conversation.scrollTop = conversation.scrollHeight;
+  return bubble;
+}
+
+function addAssistantBubble(text) {
+  const target = currentTurnDiv || conversation;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble assistant';
+  bubble.textContent = text;
+  if (currentTurnDiv) {
+    currentTurnDiv.appendChild(bubble);
+  } else {
+    conversation.appendChild(bubble);
+  }
+  conversation.scrollTop = conversation.scrollHeight;
+  return bubble;
+}
+
+// Audio playback queue
+const playCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+async function enqueueAudio(base64Data) {
+  const bytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+  audioQueue.push(bytes.buffer);
+  if (!isPlayingAudio) drainQueue();
+}
+
+async function drainQueue() {
+  if (audioQueue.length === 0) { isPlayingAudio = false; return; }
+  isPlayingAudio = true;
+  const buffer = audioQueue.shift();
+  try {
+    const decoded = await playCtx.decodeAudioData(buffer);
+    const src = playCtx.createBufferSource();
+    src.buffer = decoded;
+    src.connect(playCtx.destination);
+    src.onended = drainQueue;
+    src.start();
+  } catch (e) {
+    drainQueue(); // skip bad chunk
+  }
+}
+
+// Mic + audio pipeline
+async function startRecording() {
+  if (!ws || ws.readyState !== WebSocket.OPEN) connectWS();
+
+  // Resume AudioContext if suspended (autoplay policy)
+  if (playCtx.state === 'suspended') await playCtx.resume();
+
+  mediaStream = await navigator.mediaDevices.getUserMedia({
+    audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+  });
+
+  audioContext = new AudioContext({ sampleRate: 16000 });
+  const source = audioContext.createMediaStreamSource(mediaStream);
+
+  analyser = audioContext.createAnalyser();
+  analyser.fftSize = 256;
+  source.connect(analyser);
+
+  // ScriptProcessor to capture raw PCM (deprecated but still widely supported)
+  processor = audioContext.createScriptProcessor(4096, 1, 1);
+  source.connect(processor);
+  processor.connect(audioContext.destination);
+
+  processor.onaudioprocess = (e) => {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    const float32 = e.inputBuffer.getChannelData(0);
+    const int16 = float32ToInt16(float32);
+    ws.send(int16.buffer);
+  };
+
+  isRecording = true;
+  micBtn.classList.add('recording');
+  micLabel.textContent = 'Recording... click to stop';
+  setStatus('active', 'Listening...');
+  statusDot.classList.remove('connected');
+  statusDot.classList.add('active');
+
+  drawWaveform();
+}
+
+function stopRecording() {
+  if (processor) { processor.disconnect(); processor = null; }
+  if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+  if (audioContext) { audioContext.close(); audioContext = null; }
+  analyser = null;
+
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'flush' }));
+  }
+
+  isRecording = false;
+  micBtn.classList.remove('recording');
+  micLabel.textContent = 'Click to start';
+  setStatus('connected', 'Ready');
+  statusDot.className = 'connected';
+
+  // Clear waveform
+  waveCtx.clearRect(0, 0, waveformCanvas.width, waveformCanvas.height);
+}
+
+function float32ToInt16(float32) {
+  const int16 = new Int16Array(float32.length);
+  for (let i = 0; i < float32.length; i++) {
+    const s = Math.max(-1, Math.min(1, float32[i]));
+    int16[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  return int16;
+}
+
+// Waveform visualizer
+function drawWaveform() {
+  if (!analyser) return;
+  requestAnimationFrame(drawWaveform);
+
+  const w = waveformCanvas.width = waveformCanvas.offsetWidth;
+  const h = waveformCanvas.height = waveformCanvas.offsetHeight;
+  const data = new Uint8Array(analyser.frequencyBinCount);
+  analyser.getByteTimeDomainData(data);
+
+  waveCtx.clearRect(0, 0, w, h);
+  waveCtx.beginPath();
+  waveCtx.strokeStyle = 'rgba(167,139,250,0.6)';
+  waveCtx.lineWidth = 1.5;
+
+  const sliceWidth = w / data.length;
+  let x = 0;
+  for (let i = 0; i < data.length; i++) {
+    const v = data[i] / 128.0;
+    const y = (v * h) / 2;
+    i === 0 ? waveCtx.moveTo(x, y) : waveCtx.lineTo(x, y);
+    x += sliceWidth;
+  }
+  waveCtx.lineTo(w, h / 2);
+  waveCtx.stroke();
+}
+
+// Events
+micBtn.addEventListener('click', () => {
+  if (isRecording) { stopRecording(); } else { startRecording(); }
+});
+
+resetBtn.addEventListener('click', () => {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: 'reset' }));
+  }
+  audioQueue = [];
+  isPlayingAudio = false;
+  setMetric('m-stt', null, []);
+  setMetric('m-llm', null, []);
+  setMetric('m-total', null, []);
+});
+
+// Connect on load
+connectWS();
+</script>
+</body>
+</html>
